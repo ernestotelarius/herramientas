@@ -147,84 +147,84 @@
         const alertNotice = document.getElementById('alertNotice');
         const alertNoticeText = document.getElementById('alertNoticeText');
 
+        // Robust Full Plus Code (Open Location Code) Encoder
         function computePlusCode(lat, lng) {
-            if (lat === null || lng === null) return "SIN GPS";
+            if (lat === null || lng === null || isNaN(lat) || isNaN(lng)) return "SIN GPS";
             
             // Try using Open Location Code library if available
             try {
                 if (typeof OpenLocationCode !== 'undefined' && OpenLocationCode.encode) {
-                    return OpenLocationCode.encode(lat, lng);
+                    return OpenLocationCode.encode(lat, lng, 10);
                 }
             } catch (e) {
                 console.warn("Library fallback OLC", e);
             }
 
-            // Standalone Fallback Encoder for standard Plus Codes
-            const ALPHABET = "23456789CFGHJMPQRVWX";
+            // Standalone Pure JS Full Plus Code Generator (10-11 char code)
+            const CODE_ALPHABET = "23456789CFGHJMPQRVWX";
+            
+            // Normalize latitude [-90, 90] -> [0, 180]
             let normLat = Math.min(Math.max(lat, -90), 90) + 90;
+            // Normalize longitude [-180, 180] -> [0, 360]
             let normLng = ((lng + 180) % 360 + 360) % 360;
 
-            let latGrid = Math.floor(normLat * 8000);
-            let lngGrid = Math.floor(normLng * 8000);
-            let latStep = 20 * 8000;
-            let lngStep = 20 * 8000;
+            // Compute code pairs (10 digits + optional grid character)
+            let latVal = normLat;
+            let lngVal = normLng;
 
             let code = "";
-            for (let i = 0; i < 4; i++) {
-                latStep /= 20;
-                lngStep /= 20;
-                let latDigit = Math.floor(latGrid / latStep);
-                let lngDigit = Math.floor(lngGrid / lngStep);
-                latGrid %= latStep;
-                lngGrid %= lngStep;
-                code += ALPHABET[latDigit] + ALPHABET[lngDigit];
-                if (i === 1) code += "+";
+            
+            // Pair 1 (Resolution: 20 deg)
+            let latDigit = Math.floor(latVal / 20);
+            let lngDigit = Math.floor(lngVal / 20);
+            code += CODE_ALPHABET[latDigit] + CODE_ALPHABET[lngDigit];
+            latVal -= latDigit * 20;
+            lngVal -= lngDigit * 20;
+
+            // Pair 2 (Resolution: 1 deg)
+            latDigit = Math.floor(latVal / 1);
+            lngDigit = Math.floor(lngVal / 1);
+            code += CODE_ALPHABET[latDigit] + CODE_ALPHABET[lngDigit];
+            latVal -= latDigit * 1;
+            lngVal -= lngDigit * 1;
+
+            // Pair 3 (Resolution: 0.05 deg = 3 min)
+            latDigit = Math.floor(latVal / 0.05);
+            lngDigit = Math.floor(lngVal / 0.05);
+            code += CODE_ALPHABET[latDigit] + CODE_ALPHABET[lngDigit];
+            latVal -= latDigit * 0.05;
+            lngVal -= lngDigit * 0.05;
+
+            // Pair 4 (Resolution: 0.0025 deg = 9 sec)
+            latDigit = Math.floor(latVal / 0.0025);
+            lngDigit = Math.floor(lngVal / 0.0025);
+            code += CODE_ALPHABET[latDigit] + CODE_ALPHABET[lngDigit];
+            latVal -= latDigit * 0.0025;
+            lngVal -= lngDigit * 0.0025;
+
+            code += "+"; // Plus symbol after 8 characters
+
+            // Pair 5 (Resolution: 0.000125 deg ~ 14m)
+            latDigit = Math.floor(latVal / 0.000125);
+            lngDigit = Math.floor(lngVal / 0.000125);
+            code += CODE_ALPHABET[latDigit] + CODE_ALPHABET[lngDigit];
+            latVal -= latDigit * 0.000125;
+            lngVal -= lngDigit * 0.000125;
+
+            // Pair 6 - Additional refinement char (High accuracy 1x1m grid)
+            let gridLat = Math.floor(latVal / (0.000125 / 5));
+            let gridLng = Math.floor(lngVal / (0.000125 / 4));
+            gridLat = Math.min(Math.max(gridLat, 0), 4);
+            gridLng = Math.min(Math.max(gridLng, 0), 3);
+            const gridIndex = gridLat * 4 + gridLng;
+            if (gridIndex >= 0 && gridIndex < CODE_ALPHABET.length) {
+                code += CODE_ALPHABET[gridIndex];
             }
+
             return code;
         }
 
-        function updateLocationData(lat, lng, statusMsg = "GPS Obtenido") {
-            currentLat = lat;
-            currentLng = lng;
-            currentPlusCode = computePlusCode(lat, lng);
-
-            gpsPing.className = "hidden";
-            gpsDot.className = "relative inline-flex rounded-full h-3 w-3 bg-emerald-500";
-            gpsStatusText.textContent = statusMsg;
-            gpsStatusText.className = "text-emerald-400 font-medium";
-
-            txtPlusCode.textContent = currentPlusCode;
-            txtCoords.textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-
-            overlayPlusCode.textContent = `PlusCode: ${currentPlusCode}`;
-            overlayCoords.textContent = `Lat: ${lat.toFixed(4)} | Lon: ${lng.toFixed(4)}`;
-        }
-
-        function requestGpsLocation() {
-            gpsPing.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75";
-            gpsDot.className = "relative inline-flex rounded-full h-3 w-3 bg-amber-500";
-            gpsStatusText.textContent = "Obteniendo posición GPS...";
-            gpsStatusText.className = "text-amber-400 font-medium";
-
-            if (!("geolocation" in navigator)) {
-                showToast("Tu navegador no soporta la API de Geolocalización.");
-                return;
-            }
-
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    updateLocationData(pos.coords.latitude, pos.coords.longitude, "GPS Activo");
-                },
-                (err) => {
-                    console.warn("Error en GPS de alta precisión, probando ubicación aproximada...", err);
-                    navigator.geolocation.getCurrentPosition(
-                        (fallbackPos) => {
-                            updateLocationData(fallbackPos.coords.latitude, fallbackPos.coords.longitude, "GPS (Red)");
-                        },
-                        (error) => {
-                            gpsPing.className = "hidden";
-                            gpsDot.className = "relative inline-flex rounded-full h-3 w-3 bg-rose-500";
-                            gpsStatusText.textContent = "GPS Denegado / No disponible";
+        function updateLocationData(lat, lng, statusMsg = "GPS Activo") {
                             gpsStatusText.className = "text-rose-400 font-medium";
                             txtPlusCode.textContent = "Sin datos GPS";
                             showToast("No se pudo acceder al GPS. Asegúrate de permitir el permiso de ubicación en el navegador.");
