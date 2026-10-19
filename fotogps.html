@@ -225,14 +225,83 @@
         }
 
         function updateLocationData(lat, lng, statusMsg = "GPS Activo") {
-                            gpsStatusText.className = "text-rose-400 font-medium";
-                            txtPlusCode.textContent = "Sin datos GPS";
-                            showToast("No se pudo acceder al GPS. Asegúrate de permitir el permiso de ubicación en el navegador.");
+            currentLat = lat;
+            currentLng = lng;
+            currentPlusCode = computePlusCode(lat, lng);
+
+            // Update UI
+            gpsPing.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75";
+            gpsDot.className = "relative inline-flex rounded-full h-3 w-3 bg-emerald-500";
+            gpsStatusText.className = "text-emerald-400 font-medium";
+            gpsStatusText.textContent = statusMsg;
+
+            txtPlusCode.textContent = currentPlusCode;
+            txtCoords.textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+
+            overlayPlusCode.textContent = `PlusCode: ${currentPlusCode}`;
+            overlayCoords.textContent = `GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        }
+
+        function handleGpsError(err) {
+            console.warn("GPS Error Code:", err.code, "Message:", err.message || "Unknown error");
+            
+            let userMsg = "Error de GPS";
+            if (err.code === 1) {
+                userMsg = "Permiso GPS denegado";
+                showToast("Por favor otorga permiso de ubicación en los ajustes de tu navegador.");
+            } else if (err.code === 2) {
+                userMsg = "Ubicación no disponible";
+                showToast("Asegúrate de que la ubicación/GPS de tu móvil esté activada.");
+            } else if (err.code === 3) {
+                userMsg = "Tiempo de espera agotado";
+                showToast("Reintentando obtener señal GPS...");
+            }
+
+            gpsPing.className = "hidden";
+            gpsDot.className = "relative inline-flex rounded-full h-3 w-3 bg-rose-500";
+            gpsStatusText.className = "text-rose-400 font-medium";
+            gpsStatusText.textContent = userMsg;
+        }
+
+        function requestGpsLocation() {
+            gpsPing.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75";
+            gpsDot.className = "relative inline-flex rounded-full h-3 w-3 bg-amber-500";
+            gpsStatusText.className = "text-amber-400 font-medium";
+            gpsStatusText.textContent = "Obteniendo ubicación...";
+
+            if (!navigator.geolocation) {
+                gpsStatusText.className = "text-rose-400 font-medium";
+                gpsStatusText.textContent = "GPS no soportado";
+                txtPlusCode.textContent = "Sin GPS";
+                showToast("Tu navegador no soporta Geolocalización.");
+                return;
+            }
+
+            // Step 1: Fast lookup (Cellular / Wi-Fi) for immediate response
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    updateLocationData(pos.coords.latitude, pos.coords.longitude, "GPS Activo (Rápido)");
+
+                    // Step 2: High accuracy refinement
+                    navigator.geolocation.getCurrentPosition(
+                        (highAccPos) => {
+                            updateLocationData(highAccPos.coords.latitude, highAccPos.coords.longitude, "GPS Alta Precisión");
                         },
-                        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+                        (err) => console.warn("High precision GPS refine skipped:", err.code),
+                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                     );
                 },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+                (err) => {
+                    // Step 3: Fallback attempt with high accuracy if fast lookup failed
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                            updateLocationData(pos.coords.latitude, pos.coords.longitude, "GPS Activo");
+                        },
+                        (err2) => handleGpsError(err2),
+                        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                    );
+                },
+                { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
             );
         }
 
