@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Foto GPS PlusCode</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Open Location Code (Plus Code) Browser Library -->
+    <script src="https://cdn.jsdelivr.net/npm/openlocationcode@1.0.4/openlocationcode.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between p-3 sm:p-6">
+
+    <header class="max-w-md w-full mx-auto text-center py-2 border-b border-slate-800 mb-3">
+        <h1 class="text-xl font-bold text-emerald-400 flex items-center justify-center gap-2">
+            <i class="fa-solid fa-location-dot"></i> Foto PlusCode GPS
+        </h1>
+        <p class="text-xs text-slate-400 mt-0.5">Captura fotografías etiquetadas con coordenadas GPS y Plus Code</p>
+    </header>
+
+    <main class="max-w-md w-full mx-auto flex-grow flex flex-col justify-center gap-3">
+
+        <div id="gpsCard" class="bg-slate-800 border border-slate-700/80 rounded-2xl p-3.5 shadow-lg">
+            <div class="flex items-center justify-between text-xs font-semibold mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="relative flex h-3 w-3">
+                        <span id="gpsPing" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span id="gpsDot" class="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                    </span>
+                    <span id="gpsStatusText" class="text-amber-400 font-medium">Buscando señal GPS...</span>
+                </div>
+                <button id="btnRefreshGps" class="text-[11px] bg-slate-700 hover:bg-slate-600 text-slate-200 px-2.5 py-1 rounded-lg transition flex items-center gap-1 active:scale-95">
+                    <i class="fa-solid fa-rotate"></i> Actualizar GPS
+                </button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 text-xs">
+                <div class="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/50">
+                    <span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Plus Code</span>
+                    <span id="txtPlusCode" class="font-mono text-emerald-400 font-bold break-all text-sm block mt-0.5">Obteniendo...</span>
+                </div>
+                <div class="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/50">
+                    <span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Coordenadas</span>
+                    <span id="txtCoords" class="font-mono text-slate-300 text-xs block mt-0.5">--, --</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="relative bg-black rounded-3xl overflow-hidden aspect-[3/4] border-2 border-slate-700/80 shadow-2xl flex items-center justify-center">
+            
+            <!-- Live Camera Stream -->
+            <video id="cameraStream" autoplay playsinline class="hidden w-full h-full object-cover"></video>
+            
+            <!-- Captured Photo Canvas -->
+            <canvas id="photoCanvas" class="hidden w-full h-full object-cover"></canvas>
+
+            <!-- Camera Viewfinder Overlay Banner -->
+            <div id="viewfinderOverlay" class="absolute bottom-3 left-3 right-3 bg-slate-950/80 backdrop-blur-md border border-white/10 rounded-xl p-3 text-xs text-white flex justify-between items-center pointer-events-none z-10">
+                <div>
+                    <p class="font-bold font-mono text-emerald-400" id="overlayPlusCode">PlusCode: Buscando...</p>
+                    <p class="text-[10px] text-slate-300 mt-0.5" id="overlayCoords">GPS: Esperando localización...</p>
+                </div>
+                <i class="fa-solid fa-camera-retro text-emerald-400 text-lg"></i>
+            </div>
+
+            <!-- Start Camera Screen Prompt -->
+            <div id="startCameraPrompt" class="absolute inset-0 bg-slate-900/95 flex flex-col items-center justify-center p-6 text-center gap-3 z-20">
+                <div class="w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 text-2xl shadow-inner mb-1">
+                    <i class="fa-solid fa-camera"></i>
+                </div>
+                <h2 class="text-lg font-bold text-slate-100">Tomar Fotografía</h2>
+                <p class="text-xs text-slate-400 max-w-xs leading-relaxed">
+                    Presiona el botón para activar la cámara de tu teléfono y capturar la imagen etiquetada.
+                </p>
+
+                <div class="flex flex-col gap-2.5 w-full max-w-xs mt-2">
+                    <button id="btnStartWebcam" class="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg transition active:scale-95 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-video text-sm"></i> Activar Cámara Web
+                    </button>
+
+                    <label for="nativeFileInput" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 font-semibold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-2 active:scale-95">
+                        <i class="fa-solid fa-mobile-screen"></i> Usar Cámara Nativa del Móvil
+                    </label>
+                    <input type="file" id="nativeFileInput" accept="image/*" capture="environment" class="hidden">
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-center gap-3">
+            <button id="btnTakeSnap" disabled class="hidden flex-1 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-bold py-3.5 px-4 rounded-xl shadow-lg transition items-center justify-center gap-2 text-xs cursor-not-allowed opacity-50">
+                <i class="fa-solid fa-camera text-base"></i> Capturar Foto
+            </button>
+
+            <button id="btnRetakePhoto" class="hidden flex-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 border border-slate-700 font-bold py-3.5 px-4 rounded-xl shadow-lg transition items-center justify-center gap-2 text-xs">
+                <i class="fa-solid fa-rotate-left"></i> Cambiar Foto
+            </button>
+
+            <button id="btnDownloadPhoto" class="hidden flex-1 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-bold py-3.5 px-4 rounded-xl shadow-lg transition items-center justify-center gap-2 text-xs">
+                <i class="fa-solid fa-download text-base"></i> Guardar Imagen
+            </button>
+        </div>
+
+        <div id="alertNotice" class="hidden bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 text-xs text-rose-300 text-center">
+            <i class="fa-solid fa-circle-exclamation mr-1"></i> <span id="alertNoticeText"></span>
+        </div>
+
+    </main>
+
+    <footer class="max-w-md w-full mx-auto text-center py-2 text-[11px] text-slate-500 border-t border-slate-800/80 mt-2">
+        Procesado con Open Location Code (Plus Codes)
+    </footer>
+
+    <script>
+        // Global State
+        let currentLat = null;
+        let currentLng = null;
+        let currentPlusCode = "SIN GPS";
+        let mediaStream = null;
+
+        // DOM Element Selectors
+        const video = document.getElementById('cameraStream');
+        const canvas = document.getElementById('photoCanvas');
+        const startCameraPrompt = document.getElementById('startCameraPrompt');
+        const btnStartWebcam = document.getElementById('btnStartWebcam');
+        const nativeFileInput = document.getElementById('nativeFileInput');
+        const btnTakeSnap = document.getElementById('btnTakeSnap');
+        const btnRetakePhoto = document.getElementById('btnRetakePhoto');
+        const btnDownloadPhoto = document.getElementById('btnDownloadPhoto');
+        const btnRefreshGps = document.getElementById('btnRefreshGps');
+
+        const gpsPing = document.getElementById('gpsPing');
+        const gpsDot = document.getElementById('gpsDot');
+        const gpsStatusText = document.getElementById('gpsStatusText');
+        const txtPlusCode = document.getElementById('txtPlusCode');
+        const txtCoords = document.getElementById('txtCoords');
+        const overlayPlusCode = document.getElementById('overlayPlusCode');
+        const overlayCoords = document.getElementById('overlayCoords');
+        const alertNotice = document.getElementById('alertNotice');
+        const alertNoticeText = document.getElementById('alertNoticeText');
+
+        function computePlusCode(lat, lng) {
+            if (lat === null || lng === null) return "SIN GPS";
+            
+            // Try using Open Location Code library if available
+            try {
+                if (typeof OpenLocationCode !== 'undefined' && OpenLocationCode.encode) {
+                    return OpenLocationCode.encode(lat, lng);
+                }
+            } catch (e) {
+                console.warn("Library fallback OLC", e);
+            }
+
+            // Standalone Fallback Encoder for standard Plus Codes
+            const ALPHABET = "23456789CFGHJMPQRVWX";
+            let normLat = Math.min(Math.max(lat, -90), 90) + 90;
+            let normLng = ((lng + 180) % 360 + 360) % 360;
+
+            let latGrid = Math.floor(normLat * 8000);
+            let lngGrid = Math.floor(normLng * 8000);
+            let latStep = 20 * 8000;
+            let lngStep = 20 * 8000;
+
+            let code = "";
+            for (let i = 0; i < 4; i++) {
+                latStep /= 20;
+                lngStep /= 20;
+                let latDigit = Math.floor(latGrid / latStep);
+                let lngDigit = Math.floor(lngGrid / lngStep);
+                latGrid %= latStep;
+                lngGrid %= lngStep;
+                code += ALPHABET[latDigit] + ALPHABET[lngDigit];
+                if (i === 1) code += "+";
+            }
+            return code;
+        }
+
+        function updateLocationData(lat, lng, statusMsg = "GPS Obtenido") {
+            currentLat = lat;
+            currentLng = lng;
+            currentPlusCode = computePlusCode(lat, lng);
+
+            gpsPing.className = "hidden";
+            gpsDot.className = "relative inline-flex rounded-full h-3 w-3 bg-emerald-500";
+            gpsStatusText.textContent = statusMsg;
+            gpsStatusText.className = "text-emerald-400 font-medium";
+
+            txtPlusCode.textContent = currentPlusCode;
+            txtCoords.textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+
+            overlayPlusCode.textContent = `PlusCode: ${currentPlusCode}`;
+            overlayCoords.textContent = `Lat: ${lat.toFixed(4)} | Lon: ${lng.toFixed(4)}`;
+        }
+
+        function requestGpsLocation() {
+            gpsPing.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75";
+            gpsDot.className = "relative inline-flex rounded-full h-3 w-3 bg-amber-500";
+            gpsStatusText.textContent = "Obteniendo posición GPS...";
+            gpsStatusText.className = "text-amber-400 font-medium";
+
+            if (!("geolocation" in navigator)) {
+                showToast("Tu navegador no soporta la API de Geolocalización.");
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    updateLocationData(pos.coords.latitude, pos.coords.longitude, "GPS Activo");
+                },
+                (err) => {
+                    console.warn("Error en GPS de alta precisión, probando ubicación aproximada...", err);
+                    navigator.geolocation.getCurrentPosition(
+                        (fallbackPos) => {
+                            updateLocationData(fallbackPos.coords.latitude, fallbackPos.coords.longitude, "GPS (Red)");
+                        },
+                        (error) => {
+                            gpsPing.className = "hidden";
+                            gpsDot.className = "relative inline-flex rounded-full h-3 w-3 bg-rose-500";
+                            gpsStatusText.textContent = "GPS Denegado / No disponible";
+                            gpsStatusText.className = "text-rose-400 font-medium";
+                            txtPlusCode.textContent = "Sin datos GPS";
+                            showToast("No se pudo acceder al GPS. Asegúrate de permitir el permiso de ubicación en el navegador.");
+                        },
+                        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+                    );
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+            );
+        }
+
+        async function startWebcam() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: "environment" } },
+                    audio: false
+                });
+
+                video.srcObject = mediaStream;
+                video.classList.remove('hidden');
+                startCameraPrompt.classList.add('hidden');
+
+                btnTakeSnap.disabled = false;
+                btnTakeSnap.classList.remove('hidden', 'opacity-50', 'cursor-not-allowed');
+                btnTakeSnap.classList.add('flex');
+            } catch (err) {
+                console.error("Error activando webcam:", err);
+                showToast("No se pudo iniciar la cámara directa. Usa la opción 'Cámara Nativa del Móvil'.");
+            }
+        }
+
+        function drawWatermarkedPhoto(sourceEl) {
+            const ctx = canvas.getContext('2d');
+            const isVid = sourceEl.tagName === 'VIDEO';
+
+            canvas.width = isVid ? (sourceEl.videoWidth || 1280) : (sourceEl.naturalWidth || 1280);
+            canvas.height = isVid ? (sourceEl.videoHeight || 720) : (sourceEl.naturalHeight || 720);
+
+            // Draw captured image
+            ctx.drawImage(sourceEl, 0, 0, canvas.width, canvas.height);
+
+            // Draw bottom metadata banner
+            const bannerHeight = canvas.height * 0.15;
+            const pad = canvas.width * 0.04;
+
+            ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+            ctx.fillRect(0, canvas.height - bannerHeight, canvas.width, bannerHeight);
+
+            ctx.fillStyle = "#10b981"; // Emerald top stripe
+            ctx.fillRect(0, canvas.height - bannerHeight, canvas.width, 6);
+
+            // Plus Code text
+            const codeFontSize = Math.max(16, Math.floor(canvas.height * 0.038));
+            ctx.font = `bold ${codeFontSize}px monospace`;
+            ctx.fillStyle = "#34d399";
+            ctx.fillText(`PLUS CODE: ${currentPlusCode}`, pad, canvas.height - (bannerHeight * 0.52));
+
+            // GPS coordinates and timestamp
+            const coordFontSize = Math.max(12, Math.floor(canvas.height * 0.024));
+            ctx.font = `${coordFontSize}px sans-serif`;
+            ctx.fillStyle = "#e2e8f0";
+            const dateStr = new Date().toLocaleString();
+            const coordStr = `GPS: ${currentLat !== null ? currentLat.toFixed(6) : 'N/A'}, ${currentLng !== null ? currentLng.toFixed(6) : 'N/A'} | ${dateStr}`;
+            ctx.fillText(coordStr, pad, canvas.height - (bannerHeight * 0.22));
+
+            // Display Canvas
+            video.classList.add('hidden');
+            startCameraPrompt.classList.add('hidden');
+            canvas.classList.remove('hidden');
+
+            btnTakeSnap.classList.add('hidden');
+            btnRetakePhoto.classList.remove('hidden');
+            btnRetakePhoto.classList.add('flex');
+            btnDownloadPhoto.classList.remove('hidden');
+            btnDownloadPhoto.classList.add('flex');
+        }
+
+        // Native file camera input fallback
+        nativeFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const imgUrl = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = () => drawWatermarkedPhoto(img);
+                img.src = imgUrl;
+            }
+        });
+
+        function resetCameraView() {
+            canvas.classList.add('hidden');
+            if (mediaStream) {
+                video.classList.remove('hidden');
+                btnTakeSnap.classList.remove('hidden');
+            } else {
+                startCameraPrompt.classList.remove('hidden');
+            }
+            btnRetakePhoto.classList.add('hidden');
+            btnDownloadPhoto.classList.add('hidden');
+            nativeFileInput.value = '';
+        }
+
+        function downloadImageWithMetadata() {
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+            const safeCode = currentPlusCode.replace(/[^a-zA-Z0-9]/g, '_');
+            const fileName = `Foto_${safeCode}_${Date.now()}.jpg`;
+
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function showToast(msg) {
+            alertNoticeText.textContent = msg;
+            alertNotice.classList.remove('hidden');
+            setTimeout(() => alertNotice.classList.add('hidden'), 6000);
+        }
+
+        // Event Listeners
+        btnStartWebcam.addEventListener('click', startWebcam);
+        btnTakeSnap.addEventListener('click', () => drawWatermarkedPhoto(video));
+        btnRetakePhoto.addEventListener('click', resetCameraView);
+        btnDownloadPhoto.addEventListener('click', downloadImageWithMetadata);
+        btnRefreshGps.addEventListener('click', requestGpsLocation);
+
+        // On Load initialization
+        window.addEventListener('DOMContentLoaded', () => {
+            requestGpsLocation();
+        });
+    </script>
+</body>
+</html>
