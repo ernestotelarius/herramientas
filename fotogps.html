@@ -116,7 +116,7 @@
     </main>
 
     <footer class="max-w-md w-full mx-auto text-center py-2 text-[11px] text-slate-500 border-t border-slate-800/80 mt-2">
-        Procesado con Open Location Code (Plus Codes)
+        Procesado con Open Location Code (Plus Codes)[cite: 1]
     </footer>
 
     <script>
@@ -151,7 +151,6 @@
         function computePlusCode(lat, lng) {
             if (lat === null || lng === null || isNaN(lat) || isNaN(lng)) return "SIN GPS";
             
-            // Try using Open Location Code library if available
             try {
                 if (typeof OpenLocationCode !== 'undefined' && OpenLocationCode.encode) {
                     return OpenLocationCode.encode(lat, lng, 10);
@@ -160,58 +159,46 @@
                 console.warn("Library fallback OLC", e);
             }
 
-            // Standalone Pure JS Full Plus Code Generator (10-11 char code)
             const CODE_ALPHABET = "23456789CFGHJMPQRVWX";
-            
-            // Normalize latitude [-90, 90] -> [0, 180]
             let normLat = Math.min(Math.max(lat, -90), 90) + 90;
-            // Normalize longitude [-180, 180] -> [0, 360]
             let normLng = ((lng + 180) % 360 + 360) % 360;
 
-            // Compute code pairs (10 digits + optional grid character)
             let latVal = normLat;
             let lngVal = normLng;
-
             let code = "";
             
-            // Pair 1 (Resolution: 20 deg)
             let latDigit = Math.floor(latVal / 20);
             let lngDigit = Math.floor(lngVal / 20);
             code += CODE_ALPHABET[latDigit] + CODE_ALPHABET[lngDigit];
             latVal -= latDigit * 20;
             lngVal -= lngDigit * 20;
 
-            // Pair 2 (Resolution: 1 deg)
             latDigit = Math.floor(latVal / 1);
             lngDigit = Math.floor(lngVal / 1);
             code += CODE_ALPHABET[latDigit] + CODE_ALPHABET[lngDigit];
             latVal -= latDigit * 1;
             lngVal -= lngDigit * 1;
 
-            // Pair 3 (Resolution: 0.05 deg = 3 min)
             latDigit = Math.floor(latVal / 0.05);
             lngDigit = Math.floor(lngVal / 0.05);
             code += CODE_ALPHABET[latDigit] + CODE_ALPHABET[lngDigit];
             latVal -= latDigit * 0.05;
             lngVal -= lngDigit * 0.05;
 
-            // Pair 4 (Resolution: 0.0025 deg = 9 sec)
             latDigit = Math.floor(latVal / 0.0025);
             lngDigit = Math.floor(lngVal / 0.0025);
             code += CODE_ALPHABET[latDigit] + CODE_ALPHABET[lngDigit];
             latVal -= latDigit * 0.0025;
             lngVal -= lngDigit * 0.0025;
 
-            code += "+"; // Plus symbol after 8 characters
+            code += "+";
 
-            // Pair 5 (Resolution: 0.000125 deg ~ 14m)
             latDigit = Math.floor(latVal / 0.000125);
             lngDigit = Math.floor(lngVal / 0.000125);
             code += CODE_ALPHABET[latDigit] + CODE_ALPHABET[lngDigit];
             latVal -= latDigit * 0.000125;
             lngVal -= lngDigit * 0.000125;
 
-            // Pair 6 - Additional refinement char (High accuracy 1x1m grid)
             let gridLat = Math.floor(latVal / (0.000125 / 5));
             let gridLng = Math.floor(lngVal / (0.000125 / 4));
             gridLat = Math.min(Math.max(gridLat, 0), 4);
@@ -229,7 +216,6 @@
             currentLng = lng;
             currentPlusCode = computePlusCode(lat, lng);
 
-            // Update UI
             gpsPing.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75";
             gpsDot.className = "relative inline-flex rounded-full h-3 w-3 bg-emerald-500";
             gpsStatusText.className = "text-emerald-400 font-medium";
@@ -277,12 +263,9 @@
                 return;
             }
 
-            // Step 1: Fast lookup (Cellular / Wi-Fi) for immediate response
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
                     updateLocationData(pos.coords.latitude, pos.coords.longitude, "GPS Activo (Rápido)");
-
-                    // Step 2: High accuracy refinement
                     navigator.geolocation.getCurrentPosition(
                         (highAccPos) => {
                             updateLocationData(highAccPos.coords.latitude, highAccPos.coords.longitude, "GPS Alta Precisión");
@@ -292,7 +275,6 @@
                     );
                 },
                 (err) => {
-                    // Step 3: Fallback attempt with high accuracy if fast lookup failed
                     navigator.geolocation.getCurrentPosition(
                         (pos) => {
                             updateLocationData(pos.coords.latitude, pos.coords.longitude, "GPS Activo");
@@ -332,32 +314,8 @@
             canvas.width = isVid ? (sourceEl.videoWidth || 1280) : (sourceEl.naturalWidth || 1280);
             canvas.height = isVid ? (sourceEl.videoHeight || 720) : (sourceEl.naturalHeight || 720);
 
-            // Draw captured image
+            // Dibuja únicamente la foto original sin marcas de agua ni texto superpuesto
             ctx.drawImage(sourceEl, 0, 0, canvas.width, canvas.height);
-
-            // Draw bottom metadata banner
-            const bannerHeight = canvas.height * 0.15;
-            const pad = canvas.width * 0.04;
-
-            ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
-            ctx.fillRect(0, canvas.height - bannerHeight, canvas.width, bannerHeight);
-
-            ctx.fillStyle = "#10b981"; // Emerald top stripe
-            ctx.fillRect(0, canvas.height - bannerHeight, canvas.width, 6);
-
-            // Plus Code text
-            const codeFontSize = Math.max(16, Math.floor(canvas.height * 0.038));
-            ctx.font = `bold ${codeFontSize}px monospace`;
-            ctx.fillStyle = "#34d399";
-            ctx.fillText(`PLUS CODE: ${currentPlusCode}`, pad, canvas.height - (bannerHeight * 0.52));
-
-            // GPS coordinates and timestamp
-            const coordFontSize = Math.max(12, Math.floor(canvas.height * 0.024));
-            ctx.font = `${coordFontSize}px sans-serif`;
-            ctx.fillStyle = "#e2e8f0";
-            const dateStr = new Date().toLocaleString();
-            const coordStr = `GPS: ${currentLat !== null ? currentLat.toFixed(6) : 'N/A'}, ${currentLng !== null ? currentLng.toFixed(6) : 'N/A'} | ${dateStr}`;
-            ctx.fillText(coordStr, pad, canvas.height - (bannerHeight * 0.22));
 
             // Display Canvas
             video.classList.add('hidden');
@@ -371,7 +329,6 @@
             btnDownloadPhoto.classList.add('flex');
         }
 
-        // Native file camera input fallback
         nativeFileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
@@ -384,12 +341,18 @@
 
         function resetCameraView() {
             canvas.classList.add('hidden');
+            
+            // Detener el stream de la cámara web si estaba activo para limpiar completamente
             if (mediaStream) {
-                video.classList.remove('hidden');
-                btnTakeSnap.classList.remove('hidden');
-            } else {
-                startCameraPrompt.classList.remove('hidden');
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+                video.srcObject = null;
             }
+
+            video.classList.add('hidden');
+            startCameraPrompt.classList.remove('hidden');
+            
+            btnTakeSnap.classList.add('hidden');
             btnRetakePhoto.classList.add('hidden');
             btnDownloadPhoto.classList.add('hidden');
             nativeFileInput.value = '';
@@ -397,8 +360,10 @@
 
         function downloadImageWithMetadata() {
             const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
-            const safeCode = currentPlusCode.replace(/[^a-zA-Z0-9]/g, '_');
-            const fileName = `Foto_${safeCode}_${Date.now()}.jpg`;
+            
+            // El nombre del archivo ahora es igual al pluscode (reemplazando caracteres especiales no permitidos)
+            const safeCode = currentPlusCode !== "SIN GPS" ? currentPlusCode.replace(/[^a-zA-Z0-9]/g, '_') : `Foto_${Date.now()}`;
+            const fileName = `${safeCode}.jpg`;
 
             const link = document.createElement('a');
             link.href = dataUrl;
@@ -406,6 +371,9 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+
+            // Una vez descargada la imagen, se limpia la vista de salida
+            resetCameraView();
         }
 
         function showToast(msg) {
@@ -414,17 +382,16 @@
             setTimeout(() => alertNotice.classList.add('hidden'), 6000);
         }
 
-        // Event Listeners
         btnStartWebcam.addEventListener('click', startWebcam);
         btnTakeSnap.addEventListener('click', () => drawWatermarkedPhoto(video));
         btnRetakePhoto.addEventListener('click', resetCameraView);
         btnDownloadPhoto.addEventListener('click', downloadImageWithMetadata);
         btnRefreshGps.addEventListener('click', requestGpsLocation);
 
-        // On Load initialization
         window.addEventListener('DOMContentLoaded', () => {
             requestGpsLocation();
         });
     </script>
 </body>
 </html>
+[cite: 1]
